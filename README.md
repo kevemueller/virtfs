@@ -15,6 +15,11 @@ mount -t virtfs -o trans=virtio the_tag_to_use /var/mountpoint
 ### QEMU
 
 Launch QEMU with ```-virtfs local,path=the/path/on/the/host,mount_tag=the_tag_to_use,security_model=none```.
+Visit <https://wiki.qemu.org/Documentation/9psetup> for reference.
+
+## Background
+
+VirtFS uses the the Plan9 9P file protocol <https://9p.io/sys/man/5/INDEX.html>, <https://en.wikipedia.org/wiki/9P_(protocol)> to connect file shares exposed by a virtualization host (e.g. QEMU) to the guest.
 
 ## Build
 
@@ -29,13 +34,16 @@ See <https://man.freebsd.org/cgi/man.cgi?query=build> for reference.
 
 ## History
 
-After forking the work of Juniper was isolated by
+After forking, the work of Juniper was isolated from the outdated FreeBSD source tree by running
 
 ```sh
 git filter-repo  --path 'sys/dev/virtio/9pfs' --path 'sys/dev/virtio/9pnet' --path-glob 'sys/dev/virtio/virtio_fs_*' --path 'sys/modules/virtio/9pfs’ --path 'sys/modules/virtio/9pnet’
 ```
 
-This retained all their work on 9pfs and the underlying 9p protocol implementation.
+This retained all their work on 9pfs and the underlying 9p protocol implementation with complete history.
+
 Changes to ```sys/dev/virtio/network/if_vtnet.c``` were discarded.
+
 Hierarchy was flattened for ease of use.
+
 FreeBSD kernel version changes were applied.
