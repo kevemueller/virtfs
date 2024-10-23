@@ -33,9 +33,9 @@
  */
 
 #include <sys/types.h>
-#include <dev/virtio/virtio_fs_client.h>
-#include <dev/virtio/virtio_fs_protocol.h>
-#include <dev/virtio/virtio_fs_9p.h>
+#include <virtfs/virtio_fs_client.h>
+#include <virtfs/virtio_fs_protocol.h>
+#include <virtfs/virtio_fs_9p.h>
 
 #define VIRTFS_MAXLEN 255
 

@@ -24,7 +24,9 @@
 #
 
 .include <bsd.own.mk>
-.PATH: ${.CURDIR}/../../../dev/virtio/9pnet
+.PATH: ${.CURDIR}/../9pnet_dev
+
+CFLAGS+=	-I${.CURDIR}/../include
 
 KMOD    =  virtio_9pnet
 

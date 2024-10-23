@@ -53,7 +53,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/bio.h>
 #include "virtfs_proto.h"
 #include "virtfs.h"
-#include <dev/virtio/virtio_fs_client.h>
+#include <virtfs/virtio_fs_client.h>
 
 /* File permissions. */
 #define IEXEC		0000100 /* Executable. */
@@ -237,8 +237,11 @@ virtfs_lookup(struct vop_lookup_args *ap)
 
 	if (dvp->v_type != VDIR)
 		return (ENOTDIR);
-
+#if __FreeBSD_version < 1400037
 	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred, cnp->cn_thread);
+#else
+	error = VOP_ACCESS(dvp, VEXEC, cnp->cn_cred, curthread);
+#endif
 	if (error)
 		return (error);
 
@@ -279,10 +282,16 @@ virtfs_lookup(struct vop_lookup_args *ap)
 			if (mp->mnt_flag & MNT_RDONLY)
 				return (EROFS);
 
+#if __FreeBSD_version < 1400037
 			error = VOP_ACCESS(dvp, VWRITE, cnp->cn_cred,
 			    cnp->cn_thread);
+#else
+			error = VOP_ACCESS(dvp, VWRITE, cnp->cn_cred, curthread);
+#endif
 			if (!error) {
+#if __FreeBSD_version < 1400068
 				cnp->cn_flags |= SAVENAME;
+#endif
 				return (EJUSTRETURN);
 			}
 		}
@@ -301,8 +310,10 @@ virtfs_lookup(struct vop_lookup_args *ap)
 		/* Check if the entry in cache is stale or not */
 		if ((virtfs_node_cmp(vp, &newfid->qid) == 0) &&
 		    ((error = VOP_GETATTR(vp, &vattr, cnp->cn_cred)) == 0)) {
+#if __FreeBSD_version < 1400068
 			if (cnp->cn_nameiop != LOOKUP && (flags & ISLASTCN))
 				cnp->cn_flags |= SAVENAME;
+#endif
 			goto out;
 		}
 		/*
@@ -318,7 +329,11 @@ virtfs_lookup(struct vop_lookup_args *ap)
 		*vpp = NULLVP;
 	} else if (error == ENOENT) {
 
+#if  __FreeBSD_version < 1300064
 		if (dvp->v_iflag & VI_DOOMED)
+#else
+		if (VN_IS_DOOMED(dvp))
+#endif
 			goto out;
 		if (VOP_GETATTR(dvp, &vattr, cnp->cn_cred) == 0) {
 			error = ENOENT;
@@ -340,18 +355,32 @@ virtfs_lookup(struct vop_lookup_args *ap)
 
 		if (error != 0) {
 			vfs_ref(mp);
+#if  __FreeBSD_version < 1300074
 			VOP_UNLOCK(dvp, 0);
+#else
+			VOP_UNLOCK(dvp);
+#endif
 			error = vfs_busy(mp, 0);
 			VOP_LOCK(dvp, ltype | LK_RETRY);
 			vfs_rel(mp);
-			if (error == 0 && (dvp->v_iflag & VI_DOOMED)) {
+			if (error == 0 
+#if  __FreeBSD_version < 1300064
+			&& (dvp->v_iflag & VI_DOOMED)
+#else
+			&& VN_IS_DOOMED(dvp)
+#endif
+		) {
 				vfs_unbusy(mp);
 				error = ENOENT;
 			}
 			if (error != 0)
 				goto out;
 		}
+#if  __FreeBSD_version < 1300074
 		VOP_UNLOCK(dvp, 0);
+#else
+		VOP_UNLOCK(dvp);
+#endif
 
 		/* Try to create/reuse the node */
 		error = virtfs_vget_common(mp, NULL, cnp->cn_lkflags, dnp, newfid, &vp,
@@ -364,7 +393,11 @@ virtfs_lookup(struct vop_lookup_args *ap)
 		if (vp != dvp)
 			VOP_LOCK(dvp, ltype | LK_RETRY);
 
+#if  __FreeBSD_version < 1300064
 		if (dvp->v_iflag & VI_DOOMED) {
+#else
+		if (VN_IS_DOOMED(dvp)) {
+#endif
 			if (error == 0) {
 				if (vp == dvp)
 					vrele(vp);
@@ -384,8 +417,13 @@ virtfs_lookup(struct vop_lookup_args *ap)
 
 		if ((cnp->cn_nameiop == DELETE || cnp->cn_nameiop == RENAME)
 		    && (flags & ISLASTCN)) {
+#if __FreeBSD_version < 1400037
 			error = VOP_ACCESS(dvp, VWRITE, cnp->cn_cred,
 			    cnp->cn_thread);
+#else
+			error = VOP_ACCESS(dvp, VWRITE, cnp->cn_cred,
+			    curthread);
+#endif
 			if (error)
 				goto out;
 
@@ -416,8 +454,10 @@ virtfs_lookup(struct vop_lookup_args *ap)
 
 	cnp->cn_nameptr[cnp->cn_namelen] = tmpchr;
 
+#if __FreeBSD_version < 1400068
 	if (cnp->cn_nameiop != LOOKUP && (flags & ISLASTCN))
 		cnp->cn_flags |= SAVENAME;
+#endif
 
 	/* Store the result the cache if MAKEENTRY is specified in flags */
 	if ((cnp->cn_flags & MAKEENTRY) != 0)
@@ -819,8 +859,13 @@ virtfs_access(struct vop_access_args *ap)
 		return (error);
 
 	/* Call the Generic Access check in VOPS*/
+#if __FreeBSD_version < 1300105
 	error = vaccess(vp->v_type, vap.va_mode, vap.va_uid, vap.va_gid, accmode,
 	    cred, NULL);
+#else
+	error = vaccess(vp->v_type, vap.va_mode, vap.va_uid, vap.va_gid, accmode,
+	    cred);
+#endif
 
 	return (error);
 }
@@ -1044,7 +1089,7 @@ virtfs_chown(struct vnode *vp, uid_t uid, gid_t gid, struct ucred *cred,
 	 */
 	if (((uid != inode->n_uid && uid != cred->cr_uid) ||
 	    (gid != inode->n_gid && !groupmember(gid, cred))) &&
-	    (error = priv_check_cred(cred, PRIV_VFS_CHOWN, 0)))
+	    (error = priv_check_cred(cred, PRIV_VFS_CHOWN)))
 		return (error);
 
 	ogid = inode->n_gid;
@@ -1056,7 +1101,7 @@ virtfs_chown(struct vnode *vp, uid_t uid, gid_t gid, struct ucred *cred,
 	if ((inode->i_mode & (ISUID | ISGID)) &&
 	    (ouid != uid || ogid != gid)) {
 
-		if (priv_check_cred(cred, PRIV_VFS_RETAINSUGID, 0))
+		if (priv_check_cred(cred, PRIV_VFS_RETAINSUGID))
 			inode->i_mode &= ~(ISUID | ISGID);
 	}
 	p9_debug(VOPS, "%s: vp %p, cred %p, td %p - ret OK\n", __func__, vp, cred, td);
@@ -1094,11 +1139,11 @@ virtfs_chmod(struct vnode *vp, uint32_t  mode, struct ucred *cred, struct thread
 	 * jail(8).
 	 */
 	if (vp->v_type != VDIR && (mode & S_ISTXT)) {
-		if (priv_check_cred(cred, PRIV_VFS_STICKYFILE, 0))
+		if (priv_check_cred(cred, PRIV_VFS_STICKYFILE))
 			return (EFTYPE);
 	}
 	if (!groupmember(inode->n_gid, cred) && (mode & ISGID)) {
-		error = priv_check_cred(cred, PRIV_VFS_SETGID, 0);
+		error = priv_check_cred(cred, PRIV_VFS_SETGID);
 		if (error != 0)
 			return (error);
 	}
@@ -1107,7 +1152,7 @@ virtfs_chmod(struct vnode *vp, uint32_t  mode, struct ucred *cred, struct thread
 	 * Deny setting setuid if we are not the file owner.
 	 */
 	if ((mode & ISUID) && inode->n_uid != cred->cr_uid) {
-		error = priv_check_cred(cred, PRIV_VFS_ADMIN, 0);
+		error = priv_check_cred(cred, PRIV_VFS_ADMIN);
 		if (error != 0)
 			return (error);
 	}
@@ -1551,7 +1596,7 @@ virtfs_symlink(struct vop_symlink_args *ap)
 	struct vnode **vpp;
 	struct vattr *vap;
 	struct componentname *cnp;
-	char *symtgt;
+	const char *symtgt;
 	struct virtfs_node *dnp;
 	struct virtfs_session *vses;
 	struct mount *mp;
@@ -2043,7 +2088,11 @@ virtfs_rename(struct vop_rename_args *ap)
 	if ((error = vn_lock(fvp, LK_EXCLUSIVE)) != 0)
 		goto out;
 	VIRTFS_DECR_LINKS(finode);
+#if  __FreeBSD_version < 1300074
 	VOP_UNLOCK(fvp, 0);
+#else
+	VOP_UNLOCK(fvp);
+#endif
 
 	if (tvp) {
 		tnode = VIRTFS_VTON(tvp);
@@ -2088,3 +2137,8 @@ struct vop_vector virtfs_vnops = {
 	.vop_link =		virtfs_link,
 	.vop_readlink =		virtfs_readlink,
 };
+
+#if __FreeBSD_version < 1300070                          
+#else
+VFS_VOP_VECTOR_REGISTER(virtfs_vnops);       
+#endif

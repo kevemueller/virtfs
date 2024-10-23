@@ -41,9 +41,9 @@
 
 #include <machine/bus.h>
 
-#include <dev/virtio/virtio_fs_client.h>
-#include <dev/virtio/virtio_fs_protocol.h>
-#include <dev/virtio/virtio_fs_9p.h>
+#include <virtfs/virtio_fs_client.h>
+#include <virtfs/virtio_fs_protocol.h>
+#include <virtfs/virtio_fs_9p.h>
 #include <dev/virtio/virtio.h>
 #include <dev/virtio/virtqueue.h>
 #include <dev/virtio/virtio_ring.h>
@@ -493,7 +493,9 @@ static driver_t vt9p_drv = {
 	vt9p_mthds,
 	sizeof(struct vt9p_softc)
 };
+#if  __FreeBSD_version < 1301503
 static devclass_t vt9p_class;
+#endif
 
 static int
 vt9p_modevent(module_t mod, int type, void *unused)
@@ -518,7 +520,11 @@ vt9p_modevent(module_t mod, int type, void *unused)
 	return (error);
 }
 
+#if  __FreeBSD_version < 1301503
 DRIVER_MODULE(vt9p, virtio_pci, vt9p_drv, vt9p_class,
     vt9p_modevent, 0);
+#else
+DRIVER_MODULE(vt9p, virtio_pci, vt9p_drv, vt9p_modevent, 0);
+#endif
 MODULE_VERSION(vt9p, 1);
 MODULE_DEPEND(vt9p, virtio, 1, 1, 1);
