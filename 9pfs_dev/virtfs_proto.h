@@ -30,7 +30,7 @@
 #ifndef	__VIRTFS_PROTO_H__
 #define	__VIRTFS_PROTO_H__
 
-#include <dev/virtio/virtio_fs_9p.h>
+#include <virtfs/virtio_fs_9p.h>
 
 /* QID: Unique identification for the file being accessed */
 struct virtfs_qid {

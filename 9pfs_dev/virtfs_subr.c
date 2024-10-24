@@ -47,9 +47,9 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/vnode.h>
 #include "virtfs_proto.h"
-#include <dev/virtio/virtio_fs_client.h>
-#include <dev/virtio/virtio_fs_protocol.h>
-#include <dev/virtio/virtio_fs_9p.h>
+#include <virtfs/virtio_fs_client.h>
+#include <virtfs/virtio_fs_protocol.h>
+#include <virtfs/virtio_fs_9p.h>
 #include "virtfs.h"
 
 int

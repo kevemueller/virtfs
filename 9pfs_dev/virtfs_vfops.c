@@ -49,8 +49,8 @@ __FBSDID("$FreeBSD$");
 #include <sys/priv.h>
 #include <sys/namei.h>
 #include "virtfs_proto.h"
-#include <dev/virtio/virtio_fs_client.h>
-#include <dev/virtio/virtio_fs_9p.h>
+#include <virtfs/virtio_fs_client.h>
+#include <virtfs/virtio_fs_9p.h>
 #include "virtfs.h"
 
 /* This count is static now. Can be made tunable later */
@@ -478,7 +478,9 @@ p9_mount(struct mount *mp)
 	vfs_getnewfsid(mp);
 	strlcpy(mp->mnt_stat.f_mntfromname, from,
 	    sizeof(mp->mnt_stat.f_mntfromname));
+#if  __FreeBSD_version < 1400097
 	mp->mnt_maxsymlinklen = 0;
+#endif
 	MNT_ILOCK(mp);
 	mp->mnt_flag |= MNT_LOCAL;
 	mp->mnt_kern_flag |= MNTK_LOOKUP_SHARED | MNTK_EXTENDED_SHARED;

@@ -46,9 +46,9 @@
 #include <sys/priv.h>
 #include <sys/types.h>
 #include <sys/sysctl.h>
-#include <dev/virtio/virtio_fs_client.h>
-#include <dev/virtio/virtio_fs_protocol.h>
-#include <dev/virtio/virtio_fs_9p.h>
+#include <virtfs/virtio_fs_client.h>
+#include <virtfs/virtio_fs_protocol.h>
+#include <virtfs/virtio_fs_9p.h>
 #include "transport.h"
 
 #define QEMU_HEADER 7
@@ -1074,7 +1074,7 @@ p9_client_renameat(struct p9_fid *oldfid, char *oldname, struct p9_fid *newfid,
 
 /* Request to create symbolic link */
 int
-p9_create_symlink(struct p9_fid *fid, char *name, char *symtgt, gid_t gid)
+p9_create_symlink(struct p9_fid *fid, char *name, const char *symtgt, gid_t gid)
 {
 	int error;
 	struct p9_req_t *req;
