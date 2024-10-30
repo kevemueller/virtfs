@@ -8,7 +8,7 @@ on:
     workflow_dispatch:
 
 permissions:
-    contents: read
+    contents: write
 
 jobs:
     build:
@@ -18,8 +18,25 @@ jobs:
                 target_arch: 
                 - amd64
                 - aarch64
-                ref: 
-                - releng/14.1
+                version: 
+                  # - ref: release/14.1.0
+                  #   name: release_14.1.0
+                  # - ref: release/13.4.0
+                  #   name: release_13.4.0
+                  # - ref: release/13.3.0
+                  #   name: release_13.3.0
+                  - ref: releng/14.1
+                    name: release_14.1
+                  - ref: releng/13.4
+                    name: release_13.4
+                  - ref: releng/13.3
+                    name: release_13.3
+                  - ref: stable/14
+                    name: stable_14
+                  - ref: stable/13
+                    name: stable_13
+                  # - ref: main
+                  #   name: current
                 include:
                 -   compiler: clang-19
                     pkgs: bmake libarchive llvm@19 lld
@@ -33,7 +50,7 @@ jobs:
                     target: arm64
                     kernconf: GENERIC
         
-        name: build ${{ matrix.kernconf }} for ${{ matrix.target }}.${{ matrix.target_arch }} at ${{ matrix.ref }}
+        name: build ${{ matrix.version.name }} ${{ matrix.target }}.${{ matrix.target_arch }} ${{ matrix.kernconf }} at ${{ matrix.version.ref }}
         runs-on: macos-latest
         steps:
         - name: Dump GitHub context
@@ -92,7 +109,7 @@ jobs:
           with:
             repository: freebsd/freebsd-src
             path: freebsd-src
-            ref: ${{ matrix.ref }}
+            ref: ${{ matrix.version.ref }}
   
         - name: show environment
           run: |
@@ -109,7 +126,7 @@ jobs:
               echo Using NPROC=${NPROC}
               FREEBSD_VERSION="$(sed -nE 's/^#define[[:space:]]*__FreeBSD_version[[:space:]]*([0-9]+).*$/\1/p' freebsd-src/sys/sys/param.h)"
               echo "FREEBSD_VERSION=${FREEBSD_VERSION}" >> $GITHUB_ENV
-              echo "FreeBSD ref is ${{ matrix.ref }} (${FREEBSD_VERSION}) in freebsd-src"
+              echo "FreeBSD ref is ${{ matrix.version.name }} ${{ matrix.version.ref }} (${FREEBSD_VERSION}) in freebsd-src"
               echo "CIDIR is $(ls -l ${CIDIR}/src.conf)"
               echo "virtfs is $(ls -l ${GITHUB_WORKSPACE}/virtfs/README.md)"
        
@@ -126,19 +143,21 @@ jobs:
 
         - name: tar build-artefacts
           run: |
-            tar -cvf build-${{ matrix.target }}.${{ matrix.target_arch }}-${FREEBSD_VERSION}.tar -C dest --include '*.ko' @METALOG
-            tar -cvf build-${{ matrix.target }}.${{ matrix.target_arch }}-dbg-${FREEBSD_VERSION}.tar -C dest --include '*.ko.debug' @METALOG
+            PREFIX="virtfs-${{ matrix.version.name }}-${{ matrix.target }}.${{ matrix.target_arch }}"
+            tar -cvf $PREFIX-${FREEBSD_VERSION}.tar -C dest --include '*.ko' @METALOG
+            tar -cvf $PREFIX-dbg-${FREEBSD_VERSION}.tar -C dest --include '*.ko.debug' @METALOG
         - name: Archive build artifacts
           uses: actions/upload-artifact@v4
           with:
-            name: build-${{ matrix.target }}.${{ matrix.target_arch }}
-            path: build-${{ matrix.target }}.${{ matrix.target_arch }}*.tar
+            name: virtfs-${{ matrix.version.name }}-${{ matrix.target }}.${{ matrix.target_arch }}
+            path: virtfs-*.tar
             compression-level: 0
             retention-days: 10
             overwrite: true 
         - name: Release
           uses: softprops/action-gh-release@v2
-          if: startsWith(github.ref, 'refs/main/')
+          # if: startsWith(github.ref, 'refs/heads/main/')
           with:
+            tag_name: v1.0
             files: |
-              build-${{ matrix.target }}.${{ matrix.target_arch }}*.tar
+              virtfs-*.tar
