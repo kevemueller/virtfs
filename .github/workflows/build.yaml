@@ -156,8 +156,9 @@ jobs:
             overwrite: true 
         - name: Release
           uses: softprops/action-gh-release@v2
-          # if: startsWith(github.ref, 'refs/heads/main/')
+          if: startsWith(github.ref, 'refs/heads/main/')
           with:
             tag_name: v1.0
             files: |
               virtfs-*.tar
+        
