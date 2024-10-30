@@ -26,9 +26,11 @@ VirtFS uses the the Plan9 9P file protocol <https://9p.io/sys/man/5/INDEX.html>,
 Clone the repository and apply the following `make.conf` stanzas to include it in your kernel build.
 
 ```make
-LOCAL_MODULES_DIR="wherever_your_git_is/virtfs"
-LOCAL_MODULES="9pfs 9pnet"
+LOCAL_MODULES_DIR=wherever_your_git_is/virtfs
+LOCAL_MODULES=9pfs 9pnet
 ```
+
+See GitHub Actions for an exmample.
 
 See <https://man.freebsd.org/cgi/man.cgi?query=build> for reference.
 

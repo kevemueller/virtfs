@@ -1,0 +1,144 @@
+name: build
+
+on:
+    pull_request:
+        branches:
+            - main
+    push:
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        strategy:
+            fail-fast: false
+            matrix:
+                target_arch: 
+                - amd64
+                - aarch64
+                ref: 
+                - releng/14.1
+                include:
+                -   compiler: clang-19
+                    pkgs: bmake libarchive llvm@19 lld
+                    llvm-bindir: /opt/homebrew/opt/llvm@19/bin
+                    llvm-ld: /opt/homebrew/opt/lld/bin/ld.lld
+                    bmake: /opt/homebrew/opt/bmake/bin/bmake       
+                -   target_arch: amd64
+                    target: amd64
+                    kernconf: MINIMAL
+                -   target_arch: aarch64
+                    target: arm64
+                    kernconf: GENERIC
+        
+        name: build ${{ matrix.kernconf }} for ${{ matrix.target }}.${{ matrix.target_arch }} at ${{ matrix.ref }}
+        runs-on: macos-latest
+        steps:
+        - name: Dump GitHub context
+          env:
+            DMP_GITHUB_CONTEXT: ${{ toJson(github) }}
+            DMP_JOB_CONTEXT: ${{ toJson(job) }}
+            DMP_STEPS_CONTEXT: ${{ toJson(steps) }}
+            DMP_RUNNER_CONTEXT: ${{ toJson(runner) }}
+            DMP_STRATEGY_CONTEXT: ${{ toJson(strategy) }}
+            DMP_MATRIX_CONTEXT: ${{ toJson(matrix) }}
+          run: |
+            echo "GITHUB_CONTEXT:"
+            echo "$DMP_GITHUB_CONTEXT"
+            echo "JOB_CONTEXT:"
+            echo "$DMP_JOB_CONTEXT"
+            echo "STEPS_CONTEXT:"
+            echo "$DMP_STEPS_CONTEXT"
+            echo "RUNNER_CONTEXT:"
+            echo "$DMP_RUNNER_CONTEXT"
+            echo "STRATEGY_CONTEXT:"
+            echo "$DMP_STRATEGY_CONTEXT"
+            echo "MATRIX_CONTEXT:"
+            echo "$DMP_MATRIX_CONTEXT"
+            set | grep "^GITHUB"
+            set | grep "^RUNNER"
+
+        - name: install packages (macOS)
+          if: runner.os == 'macOS'
+          run: |
+            brew update --quiet || true
+            brew install ${{ matrix.pkgs }} || true
+
+        - name: create environment
+          run: |
+            echo "CC=${{ matrix.llvm-bindir }}/clang" >> $GITHUB_ENV
+            echo "CXX=${{ matrix.llvm-bindir }}/clang++" >> $GITHUB_ENV
+            echo "CPP=${{ matrix.llvm-bindir }}/clang-cpp" >> $GITHUB_ENV
+
+            echo "XCC=${{ matrix.llvm-bindir }}/clang" >> $GITHUB_ENV
+            echo "XCXX=${{ matrix.llvm-bindir }}/clang++" >> $GITHUB_ENV
+            echo "XCPP=${{ matrix.llvm-bindir }}/clang-cpp" >> $GITHUB_ENV
+            echo "XLD=${{ matrix.llvm-ld }}" >> $GITHUB_ENV
+
+            mkdir -p ${GITHUB_WORKSPACE}/build
+            echo "CIDIR=${GITHUB_WORKSPACE}/virtfs/.github/workflows" >> $GITHUB_ENV
+            echo "MAKEOBJDIRPREFIX=${GITHUB_WORKSPACE}/build" >> $GITHUB_ENV
+            echo "BSDTOOLS=${GITHUB_WORKSPACE}/build/${GITHUB_WORKSPACE}/freebsd-src/${{ matrix.target }}.${{ matrix.target_arch }}/tmp/legacy/bin" >> $GITHUB_ENV
+            echo "NPROC=`getconf _NPROCESSORS_ONLN 2>/dev/null || getconf NPROCESSORS_ONLN 2>/dev/null || echo 1`" >> $GITHUB_ENV
+        
+        - name: checkout self
+          uses: actions/checkout@v4
+          with:
+            path: virtfs
+        - name: checkout freebsd
+          uses: actions/checkout@v4
+          with:
+            repository: freebsd/freebsd-src
+            path: freebsd-src
+            ref: ${{ matrix.ref }}
+  
+        - name: show environment
+          run: |
+              echo Running on $(uname -a)
+              echo Shell is $SHELL
+              echo GITHUB_WORKSPACE is $GITHUB_WORKSPACE
+              echo Using bmake as ${{ matrix.bmake }}
+              echo Using CC=${CC}
+              echo Using LD=${LD}
+              echo Using XCC=${XCC}
+              echo Using XLD=${XLD}
+              echo Using MAKEOBJDIRPREFIX=${MAKEOBJDIRPREFIX}
+              echo Building BSD tools in ${BSDTOOLS}
+              echo Using NPROC=${NPROC}
+              FREEBSD_VERSION="$(sed -nE 's/^#define[[:space:]]*__FreeBSD_version[[:space:]]*([0-9]+).*$/\1/p' freebsd-src/sys/sys/param.h)"
+              echo "FREEBSD_VERSION=${FREEBSD_VERSION}" >> $GITHUB_ENV
+              echo "FreeBSD ref is ${{ matrix.ref }} (${FREEBSD_VERSION}) in freebsd-src"
+              echo "CIDIR is $(ls -l ${CIDIR}/src.conf)"
+              echo "virtfs is $(ls -l ${GITHUB_WORKSPACE}/virtfs/README.md)"
+       
+        - name: make kernel-toolchain
+          run: ${{ matrix.bmake }} -C freebsd-src -s -j$NPROC SRCCONF=${CIDIR}/src.conf TARGET=${{ matrix.target }} TARGET_ARCH=${{ matrix.target_arch }} kernel-toolchain
+        - name: make buildkernel
+          run: ${{ matrix.bmake }} -C freebsd-src -s -j$NPROC SRCCONF=${CIDIR}/src.conf TARGET=${{ matrix.target }} TARGET_ARCH=${{ matrix.target_arch }} KERNCONF=${{ matrix.kernconf }} buildkernel
+        - name: make installkernel
+          run: ${{ matrix.bmake }} -C freebsd-src -s -j$NPROC SRCCONF=${CIDIR}/src.conf TARGET=${{ matrix.target }} TARGET_ARCH=${{ matrix.target_arch }} KERNCONF=${{ matrix.kernconf }} DESTDIR=${GITHUB_WORKSPACE}/dest installkernel
+        - name: show results
+          run: |
+            find ${BSDTOOLS}
+            find dest
+
+        - name: tar build-artefacts
+          run: |
+            tar -cvf build-${{ matrix.target }}.${{ matrix.target_arch }}-${FREEBSD_VERSION}.tar -C dest --include '*.ko' @METALOG
+            tar -cvf build-${{ matrix.target }}.${{ matrix.target_arch }}-dbg-${FREEBSD_VERSION}.tar -C dest --include '*.ko.debug' @METALOG
+        - name: Archive build artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: build-${{ matrix.target }}.${{ matrix.target_arch }}
+            path: build-${{ matrix.target }}.${{ matrix.target_arch }}*.tar
+            compression-level: 0
+            retention-days: 10
+            overwrite: true 
+        - name: Release
+          uses: softprops/action-gh-release@v2
+          if: startsWith(github.ref, 'refs/main/')
+          with:
+            files: |
+              build-${{ matrix.target }}.${{ matrix.target_arch }}*.tar
