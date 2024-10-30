@@ -478,7 +478,7 @@ p9_mount(struct mount *mp)
 	vfs_getnewfsid(mp);
 	strlcpy(mp->mnt_stat.f_mntfromname, from,
 	    sizeof(mp->mnt_stat.f_mntfromname));
-#if  __FreeBSD_version < 1400097
+#if  __FreeBSD_version < 1303001
 	mp->mnt_maxsymlinklen = 0;
 #endif
 	MNT_ILOCK(mp);
